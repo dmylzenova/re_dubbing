@@ -1,3 +1,4 @@
+import warnings
 from pathlib import Path
 from moviepy.editor import VideoFileClip
 from pydub import AudioSegment
@@ -39,16 +40,15 @@ def adjust_noise_levels(redubbed_audio, audio_target: AudioSegment) -> AudioSegm
     Adjust noise level of redubbed audio to original audio noise level
     """
     noise_part = to_array_fp32(audio_target)  # Assume first 1s contains background noise
-    redubbed_audio_noise = nr.reduce_noise(y=to_array_fp32(redubbed_audio), sr=sr, y_noise=noise_part)
+    redubbed_audio_noise = nr.reduce_noise(y=to_array_fp32(redubbed_audio), sr=redubbed_audio.frame_rate, y_noise=noise_part)
     return AudioSegment(
         array_to_array_int16(redubbed_audio_noise).tobytes(),
-        frame_rate=sr,
+        frame_rate=redubbed_audio.frame_rate,
         sample_width=4,
         channels=1
     )
 
 
-import warnings
 
 
 def adjust_speed(audio_segment, speed_factor, min_factor=0.5, max_factor=2.0):
@@ -123,7 +123,8 @@ def convert_and_merge_audio(video_path, audio_path, output_path):
         "-shortest",
         output_path
     ]
-
+    cmd = " ".join(command)
+    print(f"Trying to run {cmd}. If it fails, try to manually run this command to save video")
     # Step 2: Merge Audio with Video
     subprocess.run(command, check=True)
 

@@ -30,6 +30,7 @@ class ElevenlabsSynthesizer:
         extract_audio_for_speakers(wav_path, self.diarization, self.speakers_dst)
         unique_speakers = list(self.speakers_segments.keys())
         self.voices = {}
+        """
         for spk in self.speakers_segments.keys():
             current_speaker_dst = self.speakers_dst / f"{spk}_audio.wav"
 
@@ -39,14 +40,18 @@ class ElevenlabsSynthesizer:
                 files=[current_speaker_dst],
             )
             self.voices[spk] = voice
+         """
 
-    def clone(self, text, speaker, audios_dir) -> str | Path:
-        if self.voices.get(speaker):
-            raise ValueError(f"Unknown speaker {speaker} passed for cloning.")
+    def clone(self, text, speaker, idx, audios_dir) -> str | Path:
+        # if not self.voices.get(speaker):
+        #    raise ValueError(f"Unknown speaker {speaker} passed for cloning.")
 
-        audio = self.client.generate(text=text, voice=self.voices[speaker])
+        # audio = self.client.generate(text=text, voice=self.voices[speaker])
+        
         fname = audios_dir / f"output_{idx}.wav"
+        """
         with open(fname, "wb") as audio_file:
             for chunk in audio:
                 audio_file.write(chunk)
+        """
         return fname

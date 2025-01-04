@@ -47,8 +47,8 @@ def merge_segments(list_of_segments: list, min_gap=1.0):
     return result
 
 
-def combine_audio_segments(audio: AudioSegment, segments: list, target_duration_ms: int = 30_000,
-                       soft_threshold: float = 0.5) -> AudioSegment:
+def combine_audio_segments(audio: AudioSegment, segments: list, target_duration_ms: int = 20_000,
+                    ) -> AudioSegment:
     """
     Combine audio segments to one without careful stitching as it is not that important for cloning.
     """
@@ -68,27 +68,21 @@ def combine_audio_segments(audio: AudioSegment, segments: list, target_duration_
         if segment_duration <= remaining_duration:
             combined_audio += segment_audio
             current_duration += segment_duration
-
-        elif segment_duration * soft_threshold <= remaining_duration:
-            combined_audio += segment_audio
-            current_duration += segment_duration
-            break
-
         else:
             combined_audio += segment_audio[:remaining_duration]
             current_duration += remaining_duration
             break
+    print('target_duration_ms', target_duration_ms)
+    return combined_audio[:target_duration_ms]
 
-    return combined_audio
 
-
-def extract_audio_for_speakers(audio_file: Path, diarization: Annotation, speakers_dst, target_duration=30):
+def extract_audio_for_speakers(audio_file: Path, diarization: Annotation, speakers_dst, target_duration=40):
     """
     Extract audio for cloning each speaker based on non-overlapping merged segments.
     """
     audio = AudioSegment.from_file(audio_file)
     speaker_segments = extract_consecutive_segments(diarization)
-
+    target_duration = target_duration * 1000
     for speaker, segments in speaker_segments.items():
         merged_segments = merge_segments(segments)
 
@@ -97,7 +91,6 @@ def extract_audio_for_speakers(audio_file: Path, diarization: Annotation, speake
 
         merged_segments = sorted(merged_segments, key=lambda s: s.duration, reverse=True)
 
-        target_duration = target_duration * 1000
         speaker_audio = combine_audio_segments(audio, merged_segments, target_duration)
 
         speakers_dst.mkdir(exist_ok=True)
@@ -125,7 +118,7 @@ def synthesize_edited_segments(synthesizer, alignment, original_transcription, e
             start_time = srt_timestamp_to_seconds(sub1.start)
             end_time = srt_timestamp_to_seconds(sub1.end)
 
-            audio_path = synthesizer.clone(sub2.text, speaker)
+            audio_path = synthesizer.clone(sub2.text, speaker, idx, audios_dir)
 
             segment_data = {"fname": audio_path,
                             "start": start_time,
@@ -133,3 +126,4 @@ def synthesize_edited_segments(synthesizer, alignment, original_transcription, e
                             }
             redubbed_audios.append(segment_data)
     print("Finished synthesizing audios.")
+    return redubbed_audios

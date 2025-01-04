@@ -74,6 +74,7 @@ def perform_dubbing(video_path, original_transcription_file, edited_transcriptio
     alignment = align_subtitles_with_diarization(original_transcription, diarization)
 
     synthesizer = ElevenlabsSynthesizer(diarization, folder_path)
+    synthesizer.create_voices(wav_path)
 
     redubbed_audios = synthesize_edited_segments(synthesizer, alignment, original_transcription, edited_transcription, folder_path)
 
@@ -83,8 +84,8 @@ def perform_dubbing(video_path, original_transcription_file, edited_transcriptio
     # Example Usage
     convert_and_merge_audio(
         video_path=video_path,
-        audio_path=result_audio_path,
-        output_path=result_video_path
+        audio_path=result_audio_path.as_posix(),
+        output_path=result_video_path.as_posix()
     )
 
 
