@@ -126,6 +126,19 @@ def convert_and_merge_audio(video_path, audio_path, output_path):
     cmd = " ".join(command)
     print(f"Trying to run {cmd}. If it fails, try to manually run this command to save video")
     # Step 2: Merge Audio with Video
-    subprocess.run(command, check=True)
+    try:
+        subprocess.run(command, check=True)
+    except Exception:
+        command = [
+            "ffmpeg",
+            "-i", video_path,
+            "-i", audio_path,
+            "-map", "0:v",
+            "-map", "1:a",
+            "-c:v", "copy",
+            "-shortest",
+            output_path
+        ]
+        subprocess.run(command, check=True)
 
     print("Audio successfully added to the video.")
