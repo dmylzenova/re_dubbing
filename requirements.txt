@@ -1,0 +1,9 @@
+pysrt
+pyannote.audio
+elevenlabs
+moviepy==1.0.3
+pydub
+numpy==2.0.2
+librosa
+noisereduce
+soundfile
