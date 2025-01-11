@@ -8,6 +8,30 @@ import noisereduce as nr
 import librosa
 import soundfile as sf
 import subprocess
+import pyrubberband
+
+
+# def extract_audio_from_video(video_file_path: str | Path, output_audio_file_path: str | Path):
+#     # Step 1: Convert Audio to AAC, Stereo
+#     muted_video = Path(video_file_path).with_name("muted_video.mp4")
+#     output_audio_file_path_tmp = Path(output_audio_file_path).with_suffix(".m4a")
+#     subprocess.run([
+#         "ffmpeg", "-i", video_file_path,
+#         "-an", "-c:v", "copy", muted_video,
+#         # "-vn", "-acodec", "copy", output_audio_file_path,
+#         "-map", "0:a", "-c", "copy",output_audio_file_path,
+#         # "-vn", "-c:a", "copy", output_audio_file_path,
+#     ], check=False)
+    
+#     subprocess.run([
+#         "ffmpeg", "-i", output_audio_file_path_tmp,
+#         # "-an", "-c:v", "copy", output_audio_file_path,
+#         "-ar", "44100", "-ac", "2", output_audio_file_path,
+#         # ffmpeg -i saved_files/original_audio.wav  saved_files/original_audio_fixed.wav
+#         # "-vn", "-acodec", "copy", output_audio_file_path,
+#         # "-vn", "-c:a", "copy", output_audio_file_path,
+#     ], check=False)
+
 
 
 def extract_audio_from_video(video_file_path: str | Path, output_audio_file_path: str | Path):
@@ -35,17 +59,17 @@ def array_to_array_int16(audio: np.array) -> np.array:
     samples_int16_reconstructed = (samples_int16_reconstructed * 32768).astype(np.int16)
     return samples_int16_reconstructed
 
-def adjust_noise_levels(redubbed_audio, audio_target: AudioSegment) -> AudioSegment:
+def adjust_noise_levels(redubbed_audio: AudioSegment, audio_target: AudioSegment) -> AudioSegment:
     """
     Adjust noise level of redubbed audio to original audio noise level
     """
     noise_part = to_array_fp32(audio_target)  # Assume first 1s contains background noise
-    redubbed_audio_noise = nr.reduce_noise(y=to_array_fp32(redubbed_audio), sr=redubbed_audio.frame_rate, y_noise=noise_part)
+    redubbed_audio_noise = nr.reduce_noise(y=to_array_fp32(redubbed_audio), sr=audio_target.frame_rate, y_noise=noise_part)
     return AudioSegment(
         array_to_array_int16(redubbed_audio_noise).tobytes(),
-        frame_rate=redubbed_audio.frame_rate,
-        sample_width=4,
-        channels=1
+        frame_rate=audio_target.frame_rate,
+        sample_width=redubbed_audio.sample_width,
+        channels=redubbed_audio.channels,
     )
 
 
@@ -68,10 +92,8 @@ def adjust_speed(audio_segment, speed_factor, min_factor=0.5, max_factor=2.0):
     buffer.seek(0)
 
     y, sr = librosa.load(buffer, sr=audio_segment.frame_rate)
-    y_fast = librosa.effects.time_stretch(y, rate=speed_factor)
-    y_fast = librosa.resample(y_fast, orig_sr=sr, target_sr=sr, res_type='kaiser_best')
+    y_fast = pyrubberband.time_stretch(y, audio_segment.frame_rate, speed_factor)
 
-    # Save sped-up audio back to a buffer
     output_buffer = BytesIO()
     sf.write(output_buffer, y_fast, sr, format="wav", subtype='PCM_24')
     output_buffer.seek(0)
@@ -85,17 +107,26 @@ def insert_segments_to_audio(wav_path, redubbed_audios, fade_level = 20):
     for redubbed_segment in redubbed_audios:
         redubbed_audio = AudioSegment.from_file(redubbed_segment["fname"])
         start_time, end_time = redubbed_segment["start"], redubbed_segment["end"]
-
+        print('currently ', redubbed_segment["fname"])
         required_duration = (end_time - start_time) * 1000
-        if len(redubbed_audio) < required_duration:
-            silence = AudioSegment.silent(duration=(required_duration - len(redubbed_audio)) // 2)
+        speed_factor = len(redubbed_audio) / required_duration
+
+        # if len(redubbed_audio) <= required_duration:
+        #     print('padded zeros')
+        #     silence = AudioSegment.silent(duration=(required_duration - len(redubbed_audio)) // 2, frame_rate=redubbed_audio.frame_rate)
+        #     redubbed_audio = silence + redubbed_audio + silence
+        #     redubbed_audio = adjust_noise_levels(redubbed_audio, original_audio[start_time * 1000:end_time * 1000])
+        # else:
+        #     print('speed_factor', speed_factor)
+        if speed_factor > 0.85:
+            redubbed_audio = adjust_speed(redubbed_audio, speed_factor)
+        else:
+            print('padded zeros')
+            silence = AudioSegment.silent(duration=(required_duration - len(redubbed_audio)) // 2, frame_rate=redubbed_audio.frame_rate)
             redubbed_audio = silence + redubbed_audio + silence
             redubbed_audio = adjust_noise_levels(redubbed_audio, original_audio[start_time * 1000:end_time * 1000])
-        else:
-            speed_factor = len(redubbed_audio) / required_duration
-            if speed_factor > 1.1:
-                redubbed_audio = adjust_speed(redubbed_audio, speed_factor)
 
+        
         volume_difference = original_audio.dBFS - redubbed_audio.dBFS
         redubbed_audio = redubbed_audio + volume_difference
 
@@ -105,6 +136,18 @@ def insert_segments_to_audio(wav_path, redubbed_audios, fade_level = 20):
 
 
 def convert_and_merge_audio(video_path, audio_path, output_path):
+    muted_video = Path(video_path).with_name("muted_video.mp4")
+
+    command = [
+        "ffmpeg",
+        "-i", video_path,
+        "-i", audio_path,
+        "-map[0]",
+        "-map[1]",
+        output_path
+    ]
+
+    """
     # Step 1: Convert Audio to AAC, Stereo
     converted_audio = audio_path.replace('.wav', '_converted.aac')
     subprocess.run([
@@ -112,6 +155,8 @@ def convert_and_merge_audio(video_path, audio_path, output_path):
         "-ar", "44100", "-ac", "2", "-c:a", "aac",
         converted_audio
     ], check=True)
+
+    muted_video = Path(video_file_path).with_name("muted_video.mp4")
 
     command = [
         "ffmpeg",
@@ -123,8 +168,11 @@ def convert_and_merge_audio(video_path, audio_path, output_path):
         "-shortest",
         output_path
     ]
+    
     cmd = " ".join(command)
     print(f"Trying to run {cmd}. If it fails, try to manually run this command to save video")
+    """
+
     # Step 2: Merge Audio with Video
     try:
         subprocess.run(command, check=True)
@@ -142,3 +190,14 @@ def convert_and_merge_audio(video_path, audio_path, output_path):
         subprocess.run(command, check=True)
 
     print("Audio successfully added to the video.")
+
+
+def combine_sources(result_audio_path, background_path):    
+    wav, sr = librosa.load(result_audio_path, sr=None)
+    background, sr = librosa.load(background_path, sr=None)
+
+    final_shape = min(background.shape[0], wav.shape[0])
+                      
+    result = wav[:final_shape] + background[:final_shape]
+    sf.write(result_audio_path, result, samplerate=sr)
+    return result_audio_path

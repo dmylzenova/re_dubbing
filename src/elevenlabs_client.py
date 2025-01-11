@@ -9,6 +9,7 @@ from elevenlabs import play
 from pyannote.core.annotation import Annotation
 
 from src.cloning_utils import extract_audio_for_speakers
+from src.constants import ELEVENLABS_MODEL, ELEVENLABS_VOICE_SETTINGS
 
 API_KEY = os.environ.get("ELEVENLABS_API_KEY")
 
@@ -31,27 +32,28 @@ class ElevenlabsSynthesizer:
         unique_speakers = list(self.speakers_segments.keys())
         self.voices = {}
 
-        for spk in self.speakers_segments.keys():
-            current_speaker_dst = self.speakers_dst / f"{spk}_audio.wav"
+        # for spk in self.speakers_segments.keys():
+        #     current_speaker_dst = self.speakers_dst / f"{spk}_audio.wav"
 
-            voice = self.client.clone(
-                name=spk,
-                description=None,
-                files=[current_speaker_dst],
-            )
-            self.voices[spk] = voice
-
+        #     voice = self.client.clone(
+        #         name=spk,
+        #         description=None,
+        #         files=[current_speaker_dst],
+        #     )
+        #     self.voices[spk] = voice
+        
 
     def clone(self, text, speaker, idx, audios_dir) -> str | Path:
-        if not self.voices.get(speaker):
-           raise ValueError(f"Unknown speaker {speaker} passed for cloning.")
+        # if not self.voices.get(speaker):
+        #    raise ValueError(f"Unknown speaker {speaker} passed for cloning.")
 
-        audio = self.client.generate(text=text, voice=self.voices[speaker])
+        # audio = self.client.generate(text=text, voice=self.voices[speaker], voice_settings=ELEVENLABS_VOICE_SETTINGS,
+        #                              model=ELEVENLABS_MODEL)
         
         fname = audios_dir / f"output_{idx}.wav"
-
-        with open(fname, "wb") as audio_file:
-            for chunk in audio:
-                audio_file.write(chunk)
-
+        
+        # with open(fname, "wb") as audio_file:
+        #     for chunk in audio:
+        #         audio_file.write(chunk)
+    
         return fname
