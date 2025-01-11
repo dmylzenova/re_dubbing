@@ -15,7 +15,9 @@ def align_subtitles_with_diarization(subtitles, diarization):
         sub_start = srt_timestamp_to_seconds(subtitle.start)
         sub_end = srt_timestamp_to_seconds(subtitle.end)
 
-        diarization_start, diarization_end, speaker = diarization_list[diarization_index]
+        diarization_start, diarization_end, speaker = diarization_list[
+            diarization_index
+        ]
 
         if diarization_end <= sub_start:
             # Move to the next diarization segment
@@ -30,12 +32,14 @@ def align_subtitles_with_diarization(subtitles, diarization):
             overlap_duration = overlap_end - overlap_start
 
             if overlap_duration > 0:
-                results.append({
-                    'text': subtitle.text,
-                    'speaker': speaker,
-                    'start': sub_start,
-                    'end': sub_end,
-                })
+                results.append(
+                    {
+                        "text": subtitle.text,
+                        "speaker": speaker,
+                        "start": sub_start,
+                        "end": sub_end,
+                    }
+                )
                 subtitle_index += 1
             else:
                 diarization_index += 1
