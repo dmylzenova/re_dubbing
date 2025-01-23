@@ -1,18 +1,20 @@
 import os
 from pathlib import Path
+
 import torch
 from pyannote.audio import Pipeline
 from pyannote.core.annotation import Annotation
 
 from .constants import SPEAKER_DIARIZATION_MODEL
 
-HUGGINGFACE_ACCESS_TOKEN = os.environ.get('HUGGINGFACE_ACCESS_TOKEN')
+HUGGINGFACE_ACCESS_TOKEN = os.environ.get("HUGGINGFACE_ACCESS_TOKEN")
+
 
 class DiarizationPipeline:
     def __init__(self):
         self.pipeline = Pipeline.from_pretrained(
-            SPEAKER_DIARIZATION_MODEL,
-            use_auth_token=HUGGINGFACE_ACCESS_TOKEN)
+            SPEAKER_DIARIZATION_MODEL, use_auth_token=HUGGINGFACE_ACCESS_TOKEN
+        )
 
         if torch.cuda.is_available():
             self.pipeline.to(torch.device("cuda"))

@@ -10,6 +10,7 @@ Almost Seamless Audio and Video Dubbing without Optional Lip-sync.
    git clone https://github.com/dmylzenova/re_dubbing.git
    cd repo
  
+   sh setup.sh
    conda create -n redub python=3.10
    conda activate redub
    pip install -e .

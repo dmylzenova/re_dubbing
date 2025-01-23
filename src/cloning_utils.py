@@ -1,11 +1,12 @@
+from collections import defaultdict
 from pathlib import Path
 
 from pyannote.core import Annotation, Segment
 from pydub import AudioSegment
-from collections import defaultdict
 
-from src.utils import srt_timestamp_to_seconds
 from constants import MIN_TEXT_LEN
+from src.utils import srt_timestamp_to_seconds
+
 
 def extract_consecutive_segments(diarization):
     """
@@ -14,10 +15,10 @@ def extract_consecutive_segments(diarization):
     speaker_segments = defaultdict(list)
     current_label = None
     current_sequence = []
-    print('8'* 88)
+    print("8" * 88)
     for segment, _, label in diarization.itertracks(yield_label=True):
         current_label = label if current_label is None else current_label
-        print('label', label, 'current_label', current_label)
+        print("label", label, "current_label", current_label)
         if label == current_label:
             current_sequence.append(segment)
         else:
@@ -28,7 +29,7 @@ def extract_consecutive_segments(diarization):
 
     if current_label not in speaker_segments:
         speaker_segments[current_label].append(current_sequence)
-    print('speaker_segments', len(speaker_segments))
+    print("speaker_segments", len(speaker_segments))
     return speaker_segments
 
 
@@ -52,8 +53,11 @@ def merge_segments(list_of_segments: list, min_gap=1.0):
     return result
 
 
-def combine_audio_segments(audio: AudioSegment, segments: list, target_duration_ms: int = 20_000,
-                    ) -> AudioSegment:
+def combine_audio_segments(
+    audio: AudioSegment,
+    segments: list,
+    target_duration_ms: int = 20_000,
+) -> AudioSegment:
     """
     Combine audio segments to one without careful stitching as it is not that important for cloning.
     """
@@ -62,7 +66,7 @@ def combine_audio_segments(audio: AudioSegment, segments: list, target_duration_
 
     for segment in segments:
 
-        segment_audio = audio[int(segment.start * 1000):int(segment.end * 1000)]
+        segment_audio = audio[int(segment.start * 1000) : int(segment.end * 1000)]
         segment_duration = len(segment_audio)
 
         remaining_duration = target_duration_ms - current_duration
@@ -77,11 +81,13 @@ def combine_audio_segments(audio: AudioSegment, segments: list, target_duration_
             combined_audio += segment_audio[:remaining_duration]
             current_duration += remaining_duration
             break
-    print('target_duration_ms', target_duration_ms)
+    print("target_duration_ms", target_duration_ms)
     return combined_audio[:target_duration_ms]
 
 
-def extract_audio_for_speakers(audio_file: Path, diarization: Annotation, speakers_dst, target_duration=30):
+def extract_audio_for_speakers(
+    audio_file: Path, diarization: Annotation, speakers_dst, target_duration=30
+):
     """
     Extract audio for cloning each speaker based on non-overlapping merged segments.
     """
@@ -89,30 +95,43 @@ def extract_audio_for_speakers(audio_file: Path, diarization: Annotation, speake
     speaker_segments = extract_consecutive_segments(diarization)
     target_duration = target_duration * 1000
     for speaker, segments in speaker_segments.items():
-        print('speaker', speaker)
+        print("speaker", speaker)
         merged_segments = merge_segments(segments)
 
         if not merged_segments:
-            print('notttttttt')
+            print("notttttttt")
             continue  # Skip if no valid segments
 
-        merged_segments = sorted(merged_segments, key=lambda s: s.duration, reverse=True)
+        merged_segments = sorted(
+            merged_segments, key=lambda s: s.duration, reverse=True
+        )
 
         speaker_audio = combine_audio_segments(audio, merged_segments, target_duration)
-        print('len', len(speaker_audio))
+        print("len", len(speaker_audio))
         speakers_dst.mkdir(exist_ok=True)
         if speaker_audio.duration_seconds > 0:
             speaker_audio.export(f"{speakers_dst}/{speaker}_audio.wav", format="wav")
             print(f"Saved audio for speaker {speaker}")
 
 
-def synthesize_edited_segments(synthesizer, alignment, original_transcription, edited_transcription, folder_path, enlarge_segments=True, skip_api_call=False):
+def synthesize_edited_segments(
+    synthesizer,
+    alignment,
+    original_transcription,
+    edited_transcription,
+    folder_path,
+    enlarge_segments=True,
+    skip_api_call=False,
+):
+>>>>>>> e9657bad6ef430b3c27239308b04dc68240c749a
     audios_dir = folder_path / "redubbed_audios"
     audios_dir.mkdir(exist_ok=True)
     redubbed_audios = []
     edited_indices = set()
-    
-    for idx, (sub1, sub2) in enumerate(zip(original_transcription, edited_transcription)):
+
+    for idx, (sub1, sub2) in enumerate(
+        zip(original_transcription, edited_transcription)
+    ):
         if sub1.text != sub2.text and idx not in edited_indices:
             print(f"Difference at index {sub1.index}:")
             print(f"File1: {sub1.text}")
@@ -135,19 +154,27 @@ def synthesize_edited_segments(synthesizer, alignment, original_transcription, e
             if enlarge_segments:
                 if len(sub2.text) < MIN_TEXT_LEN:
                     if idx > 0 and alignment[idx - 1]["speaker"] == speaker:
-                        start_time = srt_timestamp_to_seconds(original_transcription[idx - 1].start)
+                        start_time = srt_timestamp_to_seconds(
+                            original_transcription[idx - 1].start
+                        )
                         text = original_transcription[idx - 1].text + " " + text
-                    if idx < len(original_transcription) - 1 and alignment[idx + 1]["speaker"] == speaker:
-                        end_time = srt_timestamp_to_seconds(original_transcription[idx + 1].end)
+                    if (
+                        idx < len(original_transcription) - 1
+                        and alignment[idx + 1]["speaker"] == speaker
+                    ):
+                        end_time = srt_timestamp_to_seconds(
+                            original_transcription[idx + 1].end
+                        )
                         text = text + " " + original_transcription[idx + 1].text
                         edited_indices.add(idx + 1)
 
             audio_path = synthesizer.clone(text, speaker, idx, audios_dir, skip_api_call)
 
-            segment_data = {"fname": audio_path,
-                            "start": start_time,
-                            "end": end_time,
-                            }
+            segment_data = {
+                "fname": audio_path,
+                "start": start_time,
+                "end": end_time,
+            }
             redubbed_audios.append(segment_data)
     print("Finished synthesizing audios.")
     return redubbed_audios

@@ -1,11 +1,11 @@
 import os
+from collections import defaultdict
 from multiprocessing.managers import Value
 from pathlib import Path
-from collections import defaultdict
 from pty import spawn
 
-from elevenlabs.client import ElevenLabs
 from elevenlabs import play
+from elevenlabs.client import ElevenLabs
 from pyannote.core.annotation import Annotation
 
 from src.cloning_utils import extract_audio_for_speakers
@@ -13,11 +13,12 @@ from src.constants import ELEVENLABS_MODEL, ELEVENLABS_VOICE_SETTINGS
 
 API_KEY = os.environ.get("ELEVENLABS_API_KEY")
 
+
 class ElevenlabsSynthesizer:
     def __init__(self, diarization: Annotation, save_dir, api_key=API_KEY):
         self.client = ElevenLabs(
-              api_key=api_key,
-            )
+            api_key=api_key,
+        )
         self.diarization = diarization
         self.create_speakers_dict()
         self.speakers_dst = Path(save_dir) / "saved_speaker_audios"
@@ -35,8 +36,8 @@ class ElevenlabsSynthesizer:
 
         self.voices = {}
 
-        # if skip_api_call:
-        #     return
+        if skip_api_call:
+            return
 
         for spk in self.speakers_segments.keys():
             current_speaker_dst = self.speakers_dst / f"{spk}_audio.wav"
