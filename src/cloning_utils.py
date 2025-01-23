@@ -81,7 +81,7 @@ def combine_audio_segments(audio: AudioSegment, segments: list, target_duration_
     return combined_audio[:target_duration_ms]
 
 
-def extract_audio_for_speakers(audio_file: Path, diarization: Annotation, speakers_dst, target_duration=20):
+def extract_audio_for_speakers(audio_file: Path, diarization: Annotation, speakers_dst, target_duration=30):
     """
     Extract audio for cloning each speaker based on non-overlapping merged segments.
     """
@@ -106,7 +106,7 @@ def extract_audio_for_speakers(audio_file: Path, diarization: Annotation, speake
             print(f"Saved audio for speaker {speaker}")
 
 
-def synthesize_edited_segments(synthesizer, alignment, original_transcription, edited_transcription, folder_path, enlarge_segments=True):
+def synthesize_edited_segments(synthesizer, alignment, original_transcription, edited_transcription, folder_path, enlarge_segments=True, skip_api_call=False):
     audios_dir = folder_path / "redubbed_audios"
     audios_dir.mkdir(exist_ok=True)
     redubbed_audios = []
@@ -118,9 +118,13 @@ def synthesize_edited_segments(synthesizer, alignment, original_transcription, e
             print(f"File1: {sub1.text}")
             print(f"File2: {sub2.text}")
             print(f"Time {sub1.start, sub1.end}, {sub2.start, sub2.end}")
-            
-            aligned_data = alignment[idx]
-            print('aligned_data', aligned_data)
+
+            try:
+                aligned_data = alignment[idx]
+                print('aligned_data', aligned_data)
+            except Exception as e:
+                print("Failed to align")
+                continue
 
             speaker = aligned_data["speaker"]
             start_time = srt_timestamp_to_seconds(sub1.start)
@@ -138,7 +142,7 @@ def synthesize_edited_segments(synthesizer, alignment, original_transcription, e
                         text = text + " " + original_transcription[idx + 1].text
                         edited_indices.add(idx + 1)
 
-            audio_path = synthesizer.clone(text, speaker, idx, audios_dir)
+            audio_path = synthesizer.clone(text, speaker, idx, audios_dir, skip_api_call)
 
             segment_data = {"fname": audio_path,
                             "start": start_time,

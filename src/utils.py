@@ -1,4 +1,5 @@
 import warnings
+from multiprocessing.managers import Value
 from pathlib import Path
 from moviepy.editor import VideoFileClip
 from pydub import AudioSegment
@@ -9,29 +10,7 @@ import librosa
 import soundfile as sf
 import subprocess
 import pyrubberband
-
-
-# def extract_audio_from_video(video_file_path: str | Path, output_audio_file_path: str | Path):
-#     # Step 1: Convert Audio to AAC, Stereo
-#     muted_video = Path(video_file_path).with_name("muted_video.mp4")
-#     output_audio_file_path_tmp = Path(output_audio_file_path).with_suffix(".m4a")
-#     subprocess.run([
-#         "ffmpeg", "-i", video_file_path,
-#         "-an", "-c:v", "copy", muted_video,
-#         # "-vn", "-acodec", "copy", output_audio_file_path,
-#         "-map", "0:a", "-c", "copy",output_audio_file_path,
-#         # "-vn", "-c:a", "copy", output_audio_file_path,
-#     ], check=False)
-    
-#     subprocess.run([
-#         "ffmpeg", "-i", output_audio_file_path_tmp,
-#         # "-an", "-c:v", "copy", output_audio_file_path,
-#         "-ar", "44100", "-ac", "2", output_audio_file_path,
-#         # ffmpeg -i saved_files/original_audio.wav  saved_files/original_audio_fixed.wav
-#         # "-vn", "-acodec", "copy", output_audio_file_path,
-#         # "-vn", "-c:a", "copy", output_audio_file_path,
-#     ], check=False)
-
+import pyloudnorm as pyln
 
 
 def extract_audio_from_video(video_file_path: str | Path, output_audio_file_path: str | Path):
@@ -102,6 +81,17 @@ def adjust_speed(audio_segment, speed_factor, min_factor=0.5, max_factor=2.0):
     return AudioSegment.from_file(output_buffer, format="wav")
 
 def insert_segments_to_audio(wav_path, redubbed_audios, fade_level = 20):
+    """
+    Inserts redubbed audio segments into the original audio file, adjusting for speed, volume, and noise levels.
+
+    Args:
+        wav_path (str): Path to the original audio file.
+        redubbed_audios (list of dict): A list of dictionaries, each containing:
+            - "fname" (str): Path to the redubbed audio file.
+            - "start" (float): Start time in seconds where the redubbed audio should be inserted.
+            - "end" (float): End time in seconds where the redubbed audio should be inserted.
+        fade_level (int, optional): Duration in milliseconds for fade-in and fade-out transitions at segment boundaries. Defaults to 20.
+    """
     original_audio = AudioSegment.from_file(wav_path)
 
     for redubbed_segment in redubbed_audios:
@@ -111,22 +101,14 @@ def insert_segments_to_audio(wav_path, redubbed_audios, fade_level = 20):
         required_duration = (end_time - start_time) * 1000
         speed_factor = len(redubbed_audio) / required_duration
 
-        # if len(redubbed_audio) <= required_duration:
-        #     print('padded zeros')
-        #     silence = AudioSegment.silent(duration=(required_duration - len(redubbed_audio)) // 2, frame_rate=redubbed_audio.frame_rate)
-        #     redubbed_audio = silence + redubbed_audio + silence
-        #     redubbed_audio = adjust_noise_levels(redubbed_audio, original_audio[start_time * 1000:end_time * 1000])
-        # else:
-        #     print('speed_factor', speed_factor)
         if speed_factor > 0.85:
             redubbed_audio = adjust_speed(redubbed_audio, speed_factor)
         else:
-            print('padded zeros')
             silence = AudioSegment.silent(duration=(required_duration - len(redubbed_audio)) // 2, frame_rate=redubbed_audio.frame_rate)
             redubbed_audio = silence + redubbed_audio + silence
             redubbed_audio = adjust_noise_levels(redubbed_audio, original_audio[start_time * 1000:end_time * 1000])
 
-        
+
         volume_difference = original_audio.dBFS - redubbed_audio.dBFS
         redubbed_audio = redubbed_audio + volume_difference
 
@@ -192,12 +174,42 @@ def convert_and_merge_audio(video_path, audio_path, output_path):
     print("Audio successfully added to the video.")
 
 
-def combine_sources(result_audio_path, background_path):    
+def combine_sources(result_audio_path, background_path, normalize=False):
     wav, sr = librosa.load(result_audio_path, sr=None)
-    background, sr = librosa.load(background_path, sr=None)
+    background, background_sr = librosa.load(background_path, sr=None)
+    if sr != background_sr:
+        raise ValueError("Sample rate of background and vocals must be equal.")
+
+    if normalize:
+        meter = pyln.Meter(sr)
+        input_loudness = meter.integrated_loudness(background)
+        target_loudness = meter.integrated_loudness(wav)
+
+        print(f"Input Loudness: {input_loudness} LUFS")
+        print(f"Target Loudness: {target_loudness} LUFS")
+
+        background = pyln.normalize.loudness(
+            background, input_loudness, target_loudness
+        )
 
     final_shape = min(background.shape[0], wav.shape[0])
-                      
-    result = wav[:final_shape] + background[:final_shape]
+
+    result = (wav[:final_shape] + background[:final_shape])
+    #
+    # sound1 = AudioSegment.from_file(result_audio_path, format="wav")
+    # sound2 = AudioSegment.from_file(background_path, format="wav")
+    #
+    # # sound1 6 dB louder
+    # louder = sound2 + 10
+    #
+    # # Overlay sound2 over sound1 at position 0  (use louder instead of sound1 to use the louder version)
+    # overlay = sound1.overlay(louder, position=0)
+    #
+    # # simple export
+    # file_handle = overlay.export(result_audio_path, format="mp3")
+
+    result = result / np.max(np.abs(result))
+    print('NEW')
+    print("7" * 77)
     sf.write(result_audio_path, result, samplerate=sr)
     return result_audio_path
